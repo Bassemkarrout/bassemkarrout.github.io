@@ -65,4 +65,86 @@ try{localStorage.setItem('lang',l)}catch(e){}}
 document.querySelectorAll('.top button').forEach(b=>b.onclick=()=>setL(b.dataset.l));
 let s='en';try{s=localStorage.getItem('lang')||((navigator.language||'').slice(0,2)==='fr'?'fr':(navigator.language||'').slice(0,2)==='ar'?'ar':'en')}catch(e){}
 if(D[s]&&s!=='en')setL(s);
-</script></body></html>
+</script>
+<style>
+/* Bassem AI chat widget */
+#bk-chat-launch{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:20;border:1px solid rgba(230,195,106,.75);border-radius:999px;padding:13px 18px;background:var(--gold);color:var(--ink);font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);font:inherit}
+#bk-chat-panel{display:none;position:fixed;left:16px;bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:20;width:min(360px,calc(100vw - 32px));height:min(480px,calc(100dvh - 120px));background:#fff;color:#0b1a16;border:1px solid rgba(230,195,106,.7);border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.4);overflow:hidden;flex-direction:column}
+#bk-chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0d5a45;color:#fff;padding:12px 14px;font-weight:700}
+#bk-chat-close{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;line-height:1}
+#bk-chat-messages{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.bk-chat-msg{max-width:88%;padding:9px 11px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.bk-chat-msg.user{align-self:flex-end;background:#e6c36a;color:#0b1a16}
+.bk-chat-msg.bot{align-self:flex-start;background:#f0f2f1;color:#0b1a16}
+#bk-chat-form{display:flex;gap:6px;padding:9px;border-top:1px solid #e2e5e3;background:#fff}
+#bk-chat-input{min-width:0;flex:1;border:1px solid #d4dad7;border-radius:10px;padding:10px;color:#0b1a16;background:#fff;font:inherit;font-size:14px}
+#bk-chat-send{border:0;border-radius:10px;background:#0d5a45;color:#fff;padding:0 14px;font-weight:700;cursor:pointer}
+#bk-chat-send:disabled{opacity:.55;cursor:wait}
+@media(max-width:480px){#bk-chat-launch{left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));padding:11px 15px}#bk-chat-panel{left:12px;bottom:calc(68px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);height:min(470px,calc(100dvh - 105px))}}
+</style>
+<button id="bk-chat-launch" type="button" aria-controls="bk-chat-panel" aria-expanded="false">✦ Ask Bassem’s AI</button>
+<div id="bk-chat-panel" role="dialog" aria-label="Chat with Bassem's assistant">
+  <div id="bk-chat-head"><span id="bk-chat-title">Bassem’s AI assistant</span><button id="bk-chat-close" type="button" aria-label="Close chat">×</button></div>
+  <div id="bk-chat-messages" aria-live="polite"></div>
+  <form id="bk-chat-form">
+    <input id="bk-chat-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask about my services..." aria-label="Your message">
+    <button id="bk-chat-send" type="submit">Send</button>
+  </form>
+</div>
+<script>
+(() => {
+  // This endpoint must match your deployed Cloudflare Worker and accept POST /chat.
+  const API = "https://bassem-bot.bassem-karrout25.workers.dev/chat";
+  const ui = {
+    en: {launch:"✦ Ask Bassem’s AI", title:"Bassem’s AI assistant", placeholder:"Ask about my services...", send:"Send", welcome:"Hi! I’m Bassem’s AI assistant. Ask me about his services, strategy, or results.", error:"Sorry, the assistant is temporarily unavailable. Please contact Bassem on WhatsApp.", wait:"Thinking…"},
+    fr: {launch:"✦ Parler à l’assistant IA", title:"Assistant IA de Bassem", placeholder:"Posez une question sur mes services…", send:"Envoyer", welcome:"Bonjour ! Je suis l’assistant IA de Bassem. Posez vos questions sur ses services, sa stratégie ou ses résultats.", error:"Désolé, l’assistant est temporairement indisponible. Contactez Bassem sur WhatsApp.", wait:"Réponse en cours…"},
+    ar: {launch:"✦ اسأل مساعد باسم الذكي", title:"مساعد باسم الذكي", placeholder:"اسأل عن الخدمات…", send:"إرسال", welcome:"مرحباً! أنا المساعد الذكي لباسم. اسألني عن خدماته أو استراتيجيته أو نتائجه.", error:"عذراً، المساعد غير متاح مؤقتاً. يمكنك التواصل مع باسم عبر واتساب.", wait:"جارٍ التفكير…"}
+  };
+  const $ = id => document.getElementById(id);
+  const launch=$("bk-chat-launch"), panel=$("bk-chat-panel"), close=$("bk-chat-close");
+  const messagesEl=$("bk-chat-messages"), input=$("bk-chat-input"), send=$("bk-chat-send");
+  let history=[], greeted=false, busy=false;
+  function lang(){const l=(document.documentElement.lang||"en").slice(0,2);return ui[l]?l:"en"}
+  function applyLanguage(){
+    const t=ui[lang()];
+    launch.textContent=t.launch; $("bk-chat-title").textContent=t.title;
+    input.placeholder=t.placeholder; send.textContent=t.send;
+    panel.dir=lang()==="ar"?"rtl":"ltr"; input.dir=panel.dir;
+    if(!greeted){ addMessage("bot",t.welcome); greeted=true; }
+  }
+  function addMessage(role,text){
+    const d=document.createElement("div"); d.className="bk-chat-msg "+role;
+    d.textContent=text; messagesEl.appendChild(d); messagesEl.scrollTop=messagesEl.scrollHeight;
+  }
+  function toggle(open){
+    panel.style.display=open?"flex":"none"; launch.setAttribute("aria-expanded",String(open));
+    if(open){applyLanguage();input.focus()}
+  }
+  launch.addEventListener("click",()=>toggle(panel.style.display!=="flex"));
+  close.addEventListener("click",()=>toggle(false));
+  const originalSetL=window.setL;
+  if(typeof originalSetL==="function"){
+    window.setL=function(l){originalSetL(l);applyLanguage()};
+  }
+  document.querySelectorAll(".top button[data-l]").forEach(b=>b.addEventListener("click",()=>setTimeout(applyLanguage,0)));
+  applyLanguage();
+  $("bk-chat-form").addEventListener("submit",async e=>{
+    e.preventDefault(); const text=input.value.trim();
+    if(!text||busy)return;
+    input.value=""; addMessage("user",text); history.push({role:"user",content:text});
+    busy=true;send.disabled=true;
+    const waiting=document.createElement("div");waiting.className="bk-chat-msg bot";waiting.textContent=ui[lang()].wait;messagesEl.appendChild(waiting);messagesEl.scrollTop=messagesEl.scrollHeight;
+    try{
+      const response=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:history.slice(-10)})});
+      if(!response.ok)throw new Error("Request failed");
+      const data=await response.json();
+      if(typeof data.reply!=="string"||!data.reply.trim())throw new Error("Invalid reply");
+      history.push({role:"assistant",content:data.reply}); waiting.remove();addMessage("bot",data.reply);
+    }catch(err){
+      waiting.remove();history.pop();addMessage("bot",ui[lang()].error);
+    }finally{busy=false;send.disabled=false;input.focus()}
+  });
+})();
+</script>
+
+</body></html>
