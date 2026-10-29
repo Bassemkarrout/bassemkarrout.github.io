@@ -111,6 +111,34 @@ if(D[s]&&s!=='en')setL(s);
 #bk-chat-messages a{transition:transform .15s,filter .15s}#bk-chat-messages a:hover{filter:brightness(1.08);transform:translateY(-1px)}
 @media(max-width:480px){#bk-chat-launch{left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));padding:12px 16px}#bk-chat-panel{left:12px;bottom:calc(70px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);height:min(520px,calc(100dvh - 108px));border-radius:20px}#bk-chat-head{padding:14px}#bk-chat-messages{padding:13px 11px}}
 @media(prefers-reduced-motion:reduce){#bk-chat-panel,#bk-chat-launch,.bk-typing-dot{animation:none;transition:none}}
+
+/* Mobile / Instagram in-app browser layout correction */
+@media (max-width: 600px) {
+  #bk-chat-launch[aria-expanded="true"] { display: none !important; }
+  #bk-chat-panel {
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    max-width: none !important;
+    box-sizing: border-box;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+  }
+  #bk-chat-head, #bk-chat-form { flex-shrink: 0; }
+  #bk-chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #bk-chat-input {
+    min-width: 0;
+    width: 0;
+    font-size: 16px;
+    box-sizing: border-box;
+  }
+}
 </style>
 <button id="bk-chat-launch" type="button" aria-controls="bk-chat-panel" aria-expanded="false">✦ Ask Bassem’s AI</button>
 <div id="bk-chat-panel" role="dialog" aria-label="Chat with Bassem's assistant">
@@ -199,11 +227,43 @@ if(D[s]&&s!=='en')setL(s);
     input.setAttribute("aria-disabled","true");
     addBookingButton(lastBookingUrl);
   }
+  function fitChatToMobileViewport(){
+    if(!window.matchMedia || !window.matchMedia("(max-width: 600px)").matches) return;
+    if(panel.style.display !== "flex") return;
+    const vv = window.visualViewport;
+    if(vv){
+      panel.style.top = Math.max(6, vv.offsetTop + 6) + "px";
+      panel.style.height = Math.max(240, vv.height - 12) + "px";
+      panel.style.bottom = "auto";
+    } else {
+      panel.style.top = "8px";
+      panel.style.height = "calc(100dvh - 16px)";
+      panel.style.bottom = "auto";
+    }
+  }
+  function clearMobileChatViewport(){
+    panel.style.removeProperty("top");
+    panel.style.removeProperty("height");
+    panel.style.removeProperty("bottom");
+  }
   function toggle(open){
     panel.style.display=open?"flex":"none";
     launch.setAttribute("aria-expanded",String(open));
-    if(open){applyLanguage();if(!finished)input.focus();}
+    if(open){
+      applyLanguage();
+      fitChatToMobileViewport();
+      if(!finished) input.focus();
+      setTimeout(fitChatToMobileViewport, 80);
+      setTimeout(fitChatToMobileViewport, 250);
+    } else {
+      clearMobileChatViewport();
+    }
   }
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize", fitChatToMobileViewport);
+    window.visualViewport.addEventListener("scroll", fitChatToMobileViewport);
+  }
+  window.addEventListener("orientationchange", ()=>setTimeout(fitChatToMobileViewport, 200));
   launch.addEventListener("click",()=>toggle(panel.style.display!=="flex"));
   close.addEventListener("click",()=>toggle(false));
   $("bk-chat-languages").querySelectorAll("[data-chat-lang]").forEach(b=>{
