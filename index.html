@@ -181,7 +181,7 @@ if(D[s]&&s!=='en')setL(s);
   function addTypingIndicator(){
     const d=document.createElement("div");d.className="bk-chat-msg bot bk-typing";
     d.setAttribute("aria-label",ui[lang()].typing);d.setAttribute("role","status");
-    for(let i=0;i<3;i++){const dot=document.createElement("span");dot.className="bk-typing-dot";d.appendChild(dot);}
+    d.innerHTML = '<span class="bk-typing-dot"></span><span class="bk-typing-dot"></span><span class="bk-typing-dot"></span>';
     messagesEl.appendChild(d);messagesEl.scrollTop=messagesEl.scrollHeight;return d;
   }
   function addBookingButton(url){
@@ -221,7 +221,7 @@ if(D[s]&&s!=='en')setL(s);
     const text=input.value.trim();
     if(!text||busy||finished)return;
     input.value="";addMessage("user",text);history.push({role:"user",content:text});
-    busy=true;send.disabled=true;const waiting=addTypingIndicator();
+    busy=true;send.disabled=true;const waiting=addTypingIndicator();const requestStartedAt=Date.now();
     try{
       const response=await fetch(API,{
         method:"POST",headers:{"Content-Type":"application/json"},
@@ -231,6 +231,9 @@ if(D[s]&&s!=='en')setL(s);
       const data=await response.json();
       if(typeof data.reply!=="string"||!data.reply.trim())throw new Error("Invalid reply");
       const reply=clean(data.reply);history.push({role:"assistant",content:reply});
+      // Keep the typing dots visible briefly so the interaction feels intentional,
+      // even when the model responds very quickly.
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,650-(Date.now()-requestStartedAt))));
       waiting.remove();addMessage("bot",reply);
       if(data.finished===true)finishChat(data.consultation_url||BOOKING_URL);
     }catch(err){
